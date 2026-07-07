@@ -110,9 +110,9 @@ exports.handler = async (event) => {
         temperature: 0,
         responseMimeType: 'application/json',
         thinkingConfig: {
-          thinkingLevel: 'HIGH' // par défaut Flash-Lite pense "minimal" — HIGH indispensable pour du détourage précis
+          thinkingLevel: 'MEDIUM' // HIGH dépasse le timeout des fonctions Netlify (10-26s) sur une image complexe ; MEDIUM garde un vrai raisonnement en restant dans les temps
         },
-        maxOutputTokens: 32768, // en HIGH, la réflexion seule peut consommer plusieurs milliers de tokens : marge large obligatoire pour ne pas tronquer le JSON final
+        maxOutputTokens: 16384,
         responseSchema: {
           type: "OBJECT",
           properties: {
