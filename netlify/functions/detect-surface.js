@@ -64,37 +64,20 @@ exports.handler = async (event) => {
     }
     const clientPhoto = parseDataUrl(photo);
 
-    // PROMPT BOOSTÉ EN PRÉCISION, AVEC ÉTAPE DE RAISONNEMENT FORCÉ
+    // PROMPT RESSERRÉ : même exigence de précision, moins de redondance (= moins de tokens de réflexion consommés)
     const prompt = [
       "Tu es un système de vision par ordinateur de haute précision spécialisé dans le détourage de meubles.",
       "",
-      "ÉTAPE 1 — ANALYSE STRUCTURELLE (obligatoire avant toute coordonnée) :",
-      "Avant de sortir la moindre boîte, balaie mentalement l'image de GAUCHE À DROITE, colonne par colonne, jusqu'au bord droit de l'image inclus. Pour chaque colonne de meuble, identifie et compte le nombre de portes/tiroirs empilés verticalement. N'arrête ton balayage qu'une fois arrivé au bord droit exact de l'image — une colonne étroite ou un bandeau de finition contre un mur ou un électroménager, même partiellement coupé par le cadre, compte comme une colonne à part entière et NE DOIT PAS être ignoré.",
-      "Fais cette analyse pour toi-même en silence, puis utilise-la pour produire la liste finale de boîtes — ne saute aucune colonne repérée pendant ce balayage.",
+      "AVANT de sortir la moindre boîte : balaie mentalement l'image de GAUCHE À DROITE, colonne par colonne, jusqu'au bord droit inclus, et compte les portes/tiroirs de chaque colonne. Une colonne étroite (bandeau, colonne de finition) collée à un mur ou à un électroménager compte quand même comme une colonne à part entière — ne l'ignore jamais. Fais ce balayage en silence, puis produis la liste finale sans en sauter aucune.",
       "",
-      "ÉTAPE 2 — DÉTOURAGE :",
-      "Identifie CHAQUE façade de meuble individuelle visible (chaque porte de placard individuelle, chaque tiroir séparé).",
-      "Chaque porte ou tiroir doit avoir sa propre boîte bien distincte. Ne fais JAMAIS un seul grand rectangle englobant. Aligne les bords de CHAQUE rectangle exactement, au pixel près, sur les joints réels et les lignes de séparation visibles entre les portes. Un rectangle qui s'arrête avant le joint réel (laissant un espace vide) est une ERREUR autant qu'un rectangle qui déborde sur le joint suivant.",
+      "DÉTOURAGE : une boîte distincte par porte/tiroir individuel, jamais un rectangle englobant. Aligne chaque bord au pixel près sur le joint réel — s'arrêter avant le joint ou déborder dessus sont deux erreurs équivalentes.",
       "",
-      "PIÈGE FRÉQUENT À ÉVITER : les colonnes ou façades étroites (bandeaux, colonnes de finition, meubles filler) situées juste à côté d'un appareil électroménager (four, micro-ondes, réfrigérateur) sont RÉELLEMENT des façades de meuble et DOIVENT être détectées avec leur propre boîte, même si elles sont fines et collées à un appareil exclu. N'exclus JAMAIS un meuble uniquement parce qu'il touche un électroménager.",
+      "PIÈGES : (1) une façade fine collée à un four/micro-ondes/frigo reste un meuble à détecter ; (2) le dernier quart droit de l'image est la zone la plus souvent oubliée — vérifie explicitement qu'un meuble visible jusqu'à x=1000 a bien sa boîte ; (3) couvre aussi les éléments partiellement coupés par le cadre, à gauche comme à droite.",
       "",
-      "PIÈGE FRÉQUENT #2 — BORD DROIT DE L'IMAGE : les façades situées dans le dernier quart droit de l'image sont statistiquement les plus souvent oubliées. Vérifie explicitement, avant de conclure, qu'une boîte couvre bien la zone jusqu'à x=1000 si un meuble y est visible.",
+      "EXCLUSIONS STRICTES : plan de travail, crédence, évier, robinet, murs, sol, la grande niche ouverte centrale en bois, et TOUS les électroménagers (four, micro-ondes, plaque, hotte, frigo, lave-vaisselle...).",
       "",
-      "IMPORTANT : couvre l'INTÉGRALITÉ du meuble visible, y compris les colonnes, portes et tiroirs situés tout à gauche et tout à droite de l'image, même partiellement coupés par le cadre de la photo. N'ignore jamais un élément sous prétexte qu'il touche le bord de l'image.",
-      "",
-      "EXCLUSIONS STRICTES ET IMPÉRATIVES :",
-      "- EXCLUS le plan de travail, la crédence, l'évier, le robinet, les murs, le sol.",
-      "- EXCLUS la grande niche ouverte centrale en bois.",
-      "- EXCLUS intégralement tous les appareils électroménagers visibles sur l'image, quelle que soit leur position (four, micro-ondes, plaque de cuisson, hotte, réfrigérateur, lave-vaisselle, etc.) : ils ne doivent JAMAIS être détectés.",
-      "",
-      "SYSTÈME DE COORDONNÉES (Échelle 0 à 1000) :",
-      "Imagine que l'image fait exactement 1000 unités de large et 1000 unités de haut.",
-      "- x : position horizontale du coin haut-gauche (0 = bord gauche, 1000 = bord droit)",
-      "- y : position verticale du coin haut-gauche (0 = bord haut, 1000 = bord bas)",
-      "- w : largeur du rectangle (entre 0 et 1000)",
-      "- h : hauteur du rectangle (entre 0 et 1000)",
-      "Toutes les valeurs x, y, w, h doivent obligatoirement être des NOMBRES ENTIERS compris entre 0 et 1000."
-
+      "SYSTÈME DE COORDONNÉES (Échelle 0 à 1000, entiers uniquement) :",
+      "Image = 1000×1000 unités. x/y = coin haut-gauche (0=bord gauche/haut, 1000=bord droit/bas). w/h = largeur/hauteur du rectangle."
     ].join('\n');
 
     const body = {
@@ -110,9 +93,9 @@ exports.handler = async (event) => {
         temperature: 0,
         responseMimeType: 'application/json',
         thinkingConfig: {
-          thinkingLevel: 'MEDIUM' // HIGH dépasse le timeout des fonctions Netlify (10-26s) sur une image complexe ; MEDIUM garde un vrai raisonnement en restant dans les temps
+          thinkingLevel: 'HIGH' // prompt allégé = plus de marge de temps/tokens pour repasser en HIGH sans taper le timeout Netlify
         },
-        maxOutputTokens: 16384,
+        maxOutputTokens: 24576,
         responseSchema: {
           type: "OBJECT",
           properties: {
