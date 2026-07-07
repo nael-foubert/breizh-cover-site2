@@ -112,7 +112,7 @@ exports.handler = async (event) => {
         thinkingConfig: {
           thinkingLevel: 'HIGH' // par défaut Flash-Lite pense "minimal" — HIGH indispensable pour du détourage précis
         },
-        maxOutputTokens: 8192, // marge large : les tokens de réflexion (HIGH) et le JSON final partagent le même budget
+        maxOutputTokens: 32768, // en HIGH, la réflexion seule peut consommer plusieurs milliers de tokens : marge large obligatoire pour ne pas tronquer le JSON final
         responseSchema: {
           type: "OBJECT",
           properties: {
@@ -147,6 +147,10 @@ exports.handler = async (event) => {
     }
 
     const data = await geminiRes.json();
+    const finishReason = data?.candidates?.[0]?.finishReason;
+    if(finishReason === 'MAX_TOKENS'){
+      return { statusCode: 502, headers: cors, body: JSON.stringify({ error: "La réponse a été coupée avant la fin (budget de tokens dépassé). Augmente maxOutputTokens." }) };
+    }
     const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join('\n');
     if(!text){
       return { statusCode: 502, headers: cors, body: JSON.stringify({ error: "Pas de résultat exploitable." }) };
